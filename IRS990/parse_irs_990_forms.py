@@ -21,7 +21,7 @@ class IRS990Parser():
         req = requests.get(self.file_990)
         filings = json.loads(req.text)
         self.df_filings = pd.DataFrame(filings["Filings2018"])
-        self.num_batches = int(self.df_filings.shape[0] / 10000)
+        self.num_batches = int(self.df_filings.shape[0] / 1000)
         return self.df_filings
 
     def upload_file_to_s3(self, file_name, bucket, object_name=None):
@@ -43,14 +43,17 @@ class IRS990Parser():
         columns = []
         data = []
 
-        batches = np.array_split(self.df_filings.iloc,
+        print(self.num_batches)
+
+        batches = np.array_split(self.df_filings,
                                  self.num_batches)
+
         batch_index = 1
 
         for batch in batches:
             for index, row in batch.iterrows():
 
-                if index % 1000 == 0:
+                if index % 100 == 0:
                     print("Processed " + str(index) + " records.")
 
                 details_990 = row[url_column]
@@ -81,7 +84,7 @@ class IRS990Parser():
             temp_990_source = "/tmp/parsed_irs_990_"+str(batch_index)+".csv"
             temp_990_s3 = "parsed_irs_990_"+str(batch_index)+".csv"
 
-            df.to_csv(temp_990_source)
+            df.to_csv(temp_990_source, index=False)
             self.upload_file_to_s3(temp_990_source,
                                    self.bucket_name,
                                    temp_990_s3)
@@ -89,11 +92,12 @@ class IRS990Parser():
             # Remove the file once it's uploaded and empty data_frame
             os.remove(temp_990_source)
             df = []
+            data = []
 
             # Iterate batch_index
             batch_index=batch_index+1
             if batch_index % 10 == 0:
-                print("Processed " str(batch_index) + " batches")
+                print("Processed " + str(batch_index) + " batches")
 
 if __name__ == "__main__":
     index = "https://s3.amazonaws.com/irs-form-990/index_2018.json"
